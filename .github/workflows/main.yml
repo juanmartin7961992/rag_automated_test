@@ -43,4 +43,5 @@ jobs:
             --resolve-image-repos \
             --stack-name sam-app-hello-world \
             --capabilities CAPABILITY_IAM \
-            --region us-east-2 # Ensure this region matches the configure step
+            --region us-east-2 \
+            --parameter-overrides Environment=dev
