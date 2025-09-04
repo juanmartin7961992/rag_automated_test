@@ -48,12 +48,14 @@ jobs:
 
       - name: Build SAM application
         # This command builds the source of your application
-        run: sam build
+        run: sam build --template chatbot/rag/rag_automated/template.yaml
 
       - name: Deploy SAM application
         # This command packages and deploys your application to AWS
         run: |
-          sam deploy --no-confirm-changeset --no-fail-on-empty-changeset \
+          sam deploy \
+            --template chatbot/rag/rag_automated/template.yaml \
+            --no-confirm-changeset --no-fail-on-empty-changeset \
             --resolve-image-repos \
             --stack-name sam-app-hello-world \
             --capabilities CAPABILITY_IAM \
