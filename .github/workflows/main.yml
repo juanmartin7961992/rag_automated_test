@@ -30,7 +30,21 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-2 # Change to your desired AWS region
+          aws-region: us-east-2
+
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region us-east-2 \
+            | docker login --username AWS --password-stdin 988360969626.dkr.ecr.us-east-2.amazonaws.com
+
+      - name: Build and Push Docker image
+        run: |
+          docker buildx build \
+            -t 988360969626.dkr.ecr.us-east-2.amazonaws.com/automated-rag-dev:latest \
+            --platform linux/amd64 \
+            -f chatbot/rag/rag_automated/rag_embedding_function/dockerfile-pgvector_dual \
+            --provenance=false \
+            --push .
 
       - name: Build SAM application
         # This command builds the source of your application
