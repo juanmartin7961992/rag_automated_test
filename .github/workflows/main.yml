@@ -42,6 +42,5 @@ jobs:
           sam deploy --no-confirm-changeset --no-fail-on-empty-changeset \
             --resolve-image-repos \
             --stack-name sam-app-hello-world \
-            --s3-bucket your-s3-bucket-name \
             --capabilities CAPABILITY_IAM \
             --region us-east-2 # Ensure this region matches the configure step
