@@ -1,0 +1,20 @@
+# Use the official AWS Lambda Python 3.11 base image
+FROM public.ecr.aws/lambda/python:3.11
+
+# Set working directory inside the container
+WORKDIR /app
+
+# Copy requirements and install dependencies
+COPY chatbot/rag/rag_automated/rag_embedding_function/requirements_aws_lambda.txt ./requirements.txt
+RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
+
+# Copy your application code into Lambda's expected path
+COPY chatbot/rag/rag_automated/rag_embedding_function /var/task/chatbot/rag/aws_lambda_function
+COPY chatbot/rag /var/task/chatbot/rag
+COPY chatbot/utils /var/task/chatbot/utils
+COPY chatbot/models /var/task/chatbot/models
+COPY chatbot/rag/assets /var/task/chatbot/rag/assets
+
+# Set the Lambda handler
+CMD ["chatbot.rag.rag_automated.rag_embedding_function.app.lambda_handler"]
+
