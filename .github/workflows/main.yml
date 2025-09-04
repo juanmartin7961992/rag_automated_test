@@ -1,6 +1,6 @@
 # .github/workflows/deploy.yml
 
-name: Deploy SAM Application
+name: Deploy SAM Application 2
 
 on:
   push:
