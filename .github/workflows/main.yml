@@ -1,0 +1,43 @@
+# .github/workflows/deploy.yml
+
+name: Deploy SAM Application
+
+on:
+  push:
+    branches:
+      - main # Trigger the workflow on push to the main branch
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11' # Or your project's python version
+
+      - name: Set up SAM CLI
+        uses: aws-actions/setup-sam@v2
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-2 # Change to your desired AWS region
+
+      - name: Build SAM application
+        # This command builds the source of your application
+        run: sam build
+
+      - name: Deploy SAM application
+        # This command packages and deploys your application to AWS
+        run: |
+          sam deploy --no-confirm-changeset --no-fail-on-empty-changeset \
+            --stack-name sam-app-hello-world \
+            --s3-bucket your-s3-bucket-name \
+            --capabilities CAPABILITY_IAM \
+            --region us-east-2 # Ensure this region matches the configure step
