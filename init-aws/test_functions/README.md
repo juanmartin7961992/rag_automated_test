@@ -67,5 +67,5 @@ awslocal ssm put-parameter --name "/sam-app/dev/db/user" --value "postgres" --ty
 
 awslocal ssm put-parameter --name "/sam-app/dev/db/password" --value "password" --type String
 
-awslocal ssm put-parameter --name "/sam-app/dev/openai/api-key" --value "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" --type String
+awslocal ssm put-parameter --name "/sam-app/dev/openai/api-key" --value "your api key" --type String
 ```
