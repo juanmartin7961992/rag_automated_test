@@ -40,7 +40,7 @@ jobs:
       - name: Build and Push Docker image
         run: |
           docker buildx build \
-            -t ${{vars.RAG_AUTOMATED_DOCKER_REGISTRY}}/${{vars.DOCKER_IMAGE_RAG_AUTOMATED}}:latest \
+            -t ${{vars.RAG_AUTOMATED_DOCKER_REGISTRY}}/${{vars.RAG_AUTOMATED_DOCKER_IMAGE_NAME}}:latest \
             --platform linux/amd64 \
             -f chatbot/rag/rag_automated/rag_embedding_function/dockerfile-pgvector_dual \
             --provenance=false \
