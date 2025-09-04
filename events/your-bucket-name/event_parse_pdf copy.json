@@ -1,0 +1,20 @@
+{
+  "Records": [
+    {
+      "messageId": "19dd0b57-b21e-4ac1-bd88-01bbb068cb78",
+      "receiptHandle": "MessageReceiptHandle",
+      "body": "{\"job_id\": \"5bae0a38-dcca-4ec1-a8b8-8f93ec2a8e1b\", \"item_id\": \"5b868452-72a9-4116-9c23-892273e10d30\", \"title\": \"the-science-of-reading-understanding-how-children-learn-to-read\", \"type\": \"pdf\", \"url\": \"https://neuhaus.org/wp-content/uploads/Case-Study_Oral-Language-Supports-Writing-Improvement.pdf\"}",
+      "attributes": {
+        "ApproximateReceiveCount": "1",
+        "SentTimestamp": "1523232000000",
+        "SenderId": "123456789012",
+        "ApproximateFirstReceiveTimestamp": "1523232000001"
+      },
+      "messageAttributes": {},
+      "md5OfBody": "7b270e59b47ff90a553787216d55d91d",
+      "eventSource": "aws:sqs",
+      "eventSourceARN": "arn:aws:sqs:us-east-1:123456789012:your-queue-name",
+      "awsRegion": "us-east-1"
+    }
+  ]
+}

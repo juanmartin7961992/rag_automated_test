@@ -1,0 +1,43 @@
+version: "3.8"
+
+services:
+  localstack:
+    image: localstack/localstack:3.5
+    container_name: localstack
+    ports:
+      - "4566:4566"   # Edge API
+      - "4510-4559:4510-4559"
+    environment:
+      - SERVICES=s3,sqs,lambda,apigateway,cloudformation
+      - DEBUG=1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - LAMBDA_EXECUTOR=docker
+      - AWS_DEFAULT_REGION=us-east-2
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "./.localstack:/var/lib/localstack"
+      - "./init-aws:/etc/localstack/init/ready.d"   # auto-init scripts
+
+  sam:
+    image: public.ecr.aws/sam/build-python3.11:latest
+    container_name: sam-cli
+    working_dir: /app
+    command: >
+      sh -c "
+        sam build &&
+        sam local start-api --host 0.0.0.0 --port 3000 --docker-network ${COMPOSE_PROJECT_NAME}_default
+      "
+    volumes:
+      - ./:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "3000:3000"
+    depends_on:
+      - localstack
+    environment:
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-2

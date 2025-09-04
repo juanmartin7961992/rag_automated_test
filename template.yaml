@@ -1,0 +1,282 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: sam-app-hello-world
+
+Globals:
+  Function:
+    Timeout: 900
+    LoggingConfig:
+      LogFormat: JSON
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - uat
+      - prod
+    Description: Deployment environment
+
+Resources:
+  # --- FFmpeg Layer ---
+  # FFmpegLayer:
+  #   Type: AWS::Serverless::LayerVersion
+  #   Properties:
+  #     LayerName: !Sub ffmpeg-layer-${Environment}
+  #     Description: FFmpeg and FFprobe binaries for Lambda
+  #     ContentUri: ffmpeg-layer/
+  #     CompatibleRuntimes:
+  #       - python3.11
+  #     CompatibleArchitectures:
+  #       - x86_64
+  #     RetentionPolicy: Retain
+
+  # --- Simple Buckets without notifications first ---
+  InputBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub input-bucket-${AWS::AccountId}-${AWS::Region}
+
+  ParsedBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub parsed-bucket-${AWS::AccountId}-${AWS::Region}
+
+  ProcessedBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub processed-bucket-${AWS::AccountId}-${AWS::Region}
+
+  # Dead-letter queue
+  IngestDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub sam-app-ingest-dlq-${AWS::AccountId}
+      MessageRetentionPeriod: 1209600 # 14 days (max)
+
+  # Ingest queue
+  HtmlIngestQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub sam-app-html-ingest-${AWS::AccountId}
+      VisibilityTimeout: 900
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt IngestDeadLetterQueue.Arn
+        maxReceiveCount: 2 # after 5 failed receives, message goes to DLQ
+
+  PdfIngestQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub sam-app-pdf-ingest-${AWS::AccountId}
+      VisibilityTimeout: 900
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt IngestDeadLetterQueue.Arn
+        maxReceiveCount: 2 # after 5 failed receives, message goes to DLQ
+
+  MultimediaIngestQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub sam-app-multimedia-ingest-${AWS::AccountId}
+      VisibilityTimeout: 900
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt IngestDeadLetterQueue.Arn
+        maxReceiveCount: 2 # after 5 failed receives, message goes to DLQ
+
+  # --- Lambda Functions ---
+  CsvParserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: csv-parser-function/
+      Handler: app.lambda_handler
+      Runtime: python3.11
+      MemorySize: 256
+      Environment:
+        Variables:
+          HTML_QUEUE_URL: !GetAtt HtmlIngestQueue.QueueUrl
+          PDF_QUEUE_URL: !GetAtt PdfIngestQueue.QueueUrl
+          MULTIMEDIA_QUEUE_URL: !GetAtt MultimediaIngestQueue.QueueUrl
+
+          INPUT_BUCKET: !Ref InputBucket
+          OUTPUT_BUCKET: !Ref ParsedBucket
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref InputBucket
+        - S3WritePolicy:
+            BucketName: !Ref ParsedBucket
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt HtmlIngestQueue.QueueName
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt PdfIngestQueue.QueueName
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt MultimediaIngestQueue.QueueName
+
+  ParseHtmlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: parse_html/
+      Handler: app.lambda_handler
+      Runtime: python3.11
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          OUTPUT_BUCKET: !Ref ParsedBucket
+      Policies:
+        - S3WritePolicy:
+            BucketName: !Ref ParsedBucket
+        - SQSPollerPolicy:
+            QueueName: !GetAtt HtmlIngestQueue.QueueName
+
+  ParsePdfFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: parse-pdf/
+      Handler: app.lambda_handler
+      Runtime: python3.11
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          OUTPUT_BUCKET: !Ref ParsedBucket
+      Policies:
+        - S3WritePolicy:
+            BucketName: !Ref ParsedBucket
+        - SQSPollerPolicy:
+            QueueName: !GetAtt PdfIngestQueue.QueueName
+
+  AggregatorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: aggregator/
+      Handler: app.lambda_handler
+      Runtime: python3.11
+      MemorySize: 512
+      Environment:
+        Variables:
+          SOURCE_BUCKET: !Ref ParsedBucket
+          OUTPUT_BUCKET: !Ref ProcessedBucket
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref ParsedBucket
+        - S3WritePolicy:
+            BucketName: !Ref ProcessedBucket
+        - S3ReadPolicy:
+            BucketName: !Ref ProcessedBucket
+      Events:
+        ApiTrigger:
+          Type: Api
+          Properties:
+            Path: /combine
+            Method: post
+
+  IngestionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: "Function responsible for chuncking and embebing data 7"
+      Environment:
+        Variables:
+          OUTPUT_BUCKET: !Ref ProcessedBucket
+          DB_HOST: !Sub "{{resolve:ssm:/sam-app/${Environment}/db/host}}"
+          DB_PORT: !Sub "{{resolve:ssm:/sam-app/${Environment}/db/port}}"
+          DB_NAME: !Sub "{{resolve:ssm:/sam-app/${Environment}/db/name}}"
+          DB_USER: !Sub "{{resolve:ssm:/sam-app/${Environment}/db/user}}"
+          DB_PASSWORD: !Sub "{{resolve:ssm:/sam-app/${Environment}/db/password}}"
+          OPENAI_API_KEY: !Sub "{{resolve:ssm:/sam-app/${Environment}/openai/api-key}}"
+      PackageType: Image
+      ImageUri: 988360969626.dkr.ecr.us-east-2.amazonaws.com/automated-rag-dev@sha256:e1917bd111dfc4172cfb19fa328fd0728a264d170bfb118034749fe997aede43
+      Architectures:
+        - x86_64
+      MemorySize: 512
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref ParsedBucket
+        - S3WritePolicy:
+            BucketName: !Ref ProcessedBucket
+        - SSMParameterReadPolicy:
+            ParameterName: "/sam-app/${Environment}/*"
+        - Statement:
+            Effect: Allow
+            Action:
+              - secretsmanager:GetSecretValue
+            Resource: "*"
+
+  ParseMultimediaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: parse_multimedia/
+      Handler: app.lambda_handler
+      Runtime: python3.11
+      MemorySize: 512
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          OPENAI_API_KEY: !Sub "{{resolve:ssm:/sam-app/${Environment}/openai/api-key}}"
+          OUTPUT_BUCKET: !Ref ParsedBucket
+      Policies:
+        - S3WritePolicy:
+            BucketName: !Ref ParsedBucket
+        - SQSPollerPolicy:
+            QueueName: !GetAtt MultimediaIngestQueue.QueueName
+        - SSMParameterReadPolicy:
+            ParameterName: "/sam-app/${Environment}/*"
+        - Statement:
+            Effect: Allow
+            Action:
+              - secretsmanager:GetSecretValue
+            Resource: "*"
+
+  # --- Event Source Mappings ---
+  ParseHtmlSQSMappings:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      BatchSize: 1
+      MaximumBatchingWindowInSeconds: 0
+      # ScalingConfig:
+      #   MaximumConcurrency: 500
+      EventSourceArn: !GetAtt HtmlIngestQueue.Arn
+      FunctionName: !Ref ParseHtmlFunction
+      # FilterCriteria:
+      #   Filters:
+      #     - Pattern: '{"body": {"type": ["html"]}}'
+
+  ParseMultimediaSQSMappings:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      BatchSize: 1
+      MaximumBatchingWindowInSeconds: 0
+      # ScalingConfig:
+      #   MaximumConcurrency: 500
+      EventSourceArn: !GetAtt MultimediaIngestQueue.Arn
+      FunctionName: !Ref ParseMultimediaFunction
+      # FilterCriteria:
+      #   Filters:
+      #     - Pattern: '{"body": {"type": ["audio","video"]}}'
+
+  ParsePdfSQSMappings:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      BatchSize: 1
+      MaximumBatchingWindowInSeconds: 0
+      # ScalingConfig:
+      #   MaximumConcurrency: 500
+      EventSourceArn: !GetAtt PdfIngestQueue.Arn
+      FunctionName: !Ref ParsePdfFunction
+      # FilterCriteria:
+      #   Filters:
+      #     - Pattern: '{"messageAttributes": {"type": {"stringValue": ["pdf"]}}}'
+
+Outputs:
+  InputBucketName:
+    Value: !Ref InputBucket
+  ParsedBucketName:
+    Value: !Ref ParsedBucket
+  ProcessedBucketName:
+    Value: !Ref ProcessedBucket
+  HtmlIngestQueueUrl:
+    Value: !Ref HtmlIngestQueue
+  PdfIngestQueueUrl:
+    Value: !Ref PdfIngestQueue
+  MultimediaIngestQueueUrl:
+    Value: !Ref MultimediaIngestQueue
