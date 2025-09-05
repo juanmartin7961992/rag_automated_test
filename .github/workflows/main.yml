@@ -70,6 +70,7 @@ jobs:
             --capabilities CAPABILITY_IAM \
             --region us-east-2 \
             --parameter-overrides "
+              Environment=dev
               OpenAIApiKey=${{ secrets.OPENAI_API_KEY }}
               DbHost=${{ secrets.DB_HOST }}
               DbPort=${{ secrets.DB_PORT }}
