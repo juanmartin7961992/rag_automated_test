@@ -39,12 +39,21 @@ jobs:
 
       - name: Build and Push Docker image
         run: |
+          # Generate unique tag (timestamp + commit SHA)
+          TIMESTAMP=$(date +%Y%m%d%H%M%S)
+          COMMIT_SHA_SHORT=$(git rev-parse --short HEAD)
+          DEV_RAG_IMAGE_TAG="${TIMESTAMP}-${COMMIT_SHA_SHORT}"
+
           docker buildx build \
             -t ${{vars.RAG_AUTOMATED_DOCKER_REGISTRY}}/${{vars.RAG_AUTOMATED_DOCKER_IMAGE_NAME}}:latest \
+            -t ${{vars.RAG_AUTOMATED_DOCKER_REGISTRY}}/${{vars.RAG_AUTOMATED_DOCKER_IMAGE_NAME}}:$DEV_RAG_IMAGE_TAG \
             --platform linux/amd64 \
             -f chatbot/rag/rag_automated/rag_embedding_function/dockerfile-pgvector_dual \
             --provenance=false \
             --push .
+
+          # Store the image tag for SAM deployment
+          echo "DEV_RAG_IMAGE_TAG=$DEV_RAG_IMAGE_TAG" >> $GITHUB_ENV
 
       - name: Build SAM application
         # This command builds the source of your application
@@ -67,4 +76,5 @@ jobs:
               DbName=${{ secrets.DEV_DB_NAME }}
               DbUser=${{ secrets.DEV_DB_USER }}
               DbPassword=${{ secrets.DEV_DB_PASSWORD }}
+              RagImageTag=${{ env.DEV_RAG_IMAGE_TAG }}
             "
