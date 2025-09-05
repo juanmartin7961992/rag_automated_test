@@ -8,7 +8,7 @@ on:
       - main # Trigger the workflow on push to the main branch
 
 jobs:
-  build-and-deploy:
+  rag-automated-build-and-deploy:
     runs-on: ubuntu-latest
     environment:
       name: dev
