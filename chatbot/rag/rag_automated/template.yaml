@@ -196,11 +196,11 @@ Resources:
             BucketName: !Ref ParsedBucket
         - S3WritePolicy:
             BucketName: !Ref ProcessedBucket
-        - Statement:
-            Effect: Allow
-            Action:
-              - secretsmanager:GetSecretValue
-            Resource: "*"
+        # - Statement:
+        #     Effect: Allow
+        #     Action:
+        #       - secretsmanager:GetSecretValue
+        #     Resource: "*"
 
   ParseMultimediaFunction:
     Type: AWS::Serverless::Function
@@ -220,11 +220,11 @@ Resources:
             BucketName: !Ref ParsedBucket
         - SQSPollerPolicy:
             QueueName: !GetAtt MultimediaIngestQueue.QueueName
-        - Statement:
-            Effect: Allow
-            Action:
-              - secretsmanager:GetSecretValue
-            Resource: "*"
+        # - Statement:
+        #     Effect: Allow
+        #     Action:
+        #       - secretsmanager:GetSecretValue
+        #     Resource: "*"
 
   # --- Event Source Mappings ---
   ParseHtmlSQSMappings:
