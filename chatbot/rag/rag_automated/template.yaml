@@ -50,31 +50,31 @@ Resources:
   # --- Simple Buckets without notifications first ---
   InputBucket:
     Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub ${Environment}-input-bucket-${AWS::AccountId}-${AWS::Region}
+    # Properties:
+    #   BucketName: !Sub ${Environment}-input-bucket-${AWS::AccountId}-${AWS::Region}
 
   ParsedBucket:
     Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub ${Environment}-parsed-bucket-${AWS::AccountId}-${AWS::Region}
+    # Properties:
+    #   BucketName: !Sub ${Environment}-parsed-bucket-${AWS::AccountId}-${AWS::Region}
 
   ProcessedBucket:
     Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub ${Environment}-processed-bucket-${AWS::AccountId}-${AWS::Region}
+    # Properties:
+    #   BucketName: !Sub ${Environment}-processed-bucket-${AWS::AccountId}-${AWS::Region}
 
   # Dead-letter queue
   IngestDeadLetterQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub ${Environment}-sam-app-ingest-dlq-${AWS::AccountId}
+      # QueueName: !Sub ${Environment}-sam-app-ingest-dlq-${AWS::AccountId}
       MessageRetentionPeriod: 1209600 # 14 days (max)
 
   # Ingest queue
   HtmlIngestQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub ${Environment}-sam-app-html-ingest-${AWS::AccountId}
+      # QueueName: !Sub ${Environment}-sam-app-html-ingest-${AWS::AccountId}
       VisibilityTimeout: 900
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt IngestDeadLetterQueue.Arn
@@ -83,7 +83,7 @@ Resources:
   PdfIngestQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub ${Environment}-sam-app-pdf-ingest-${AWS::AccountId}
+      # QueueName: !Sub ${Environment}-sam-app-pdf-ingest-${AWS::AccountId}
       VisibilityTimeout: 900
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt IngestDeadLetterQueue.Arn
@@ -92,7 +92,7 @@ Resources:
   MultimediaIngestQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub ${Environment}-sam-app-multimedia-ingest-${AWS::AccountId}
+      # QueueName: !Sub ${Environment}-sam-app-multimedia-ingest-${AWS::AccountId}
       VisibilityTimeout: 900
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt IngestDeadLetterQueue.Arn
