@@ -9,29 +9,32 @@ Globals:
       LogFormat: JSON
 
 Parameters:
-  Environment:
+  OpenAIApiKey:
     Type: String
-    Default: dev
-    AllowedValues:
-      - dev
-      - uat
-      - prod
-    Description: Deployment environment
+    NoEcho: true
+
+  DbHost:
+    Type: String
+    NoEcho: true
+
+  DbPort:
+    Type: String
+    Default: 5432
+    NoEcho: true
+
+  DbName:
+    Type: String
+    NoEcho: true
+
+  DbUser:
+    Type: String
+    NoEcho: true
+
+  DbPassword:
+    Type: String
+    NoEcho: true
 
 Resources:
-  # --- FFmpeg Layer ---
-  # FFmpegLayer:
-  #   Type: AWS::Serverless::LayerVersion
-  #   Properties:
-  #     LayerName: !Sub ffmpeg-layer-${Environment}
-  #     Description: FFmpeg and FFprobe binaries for Lambda
-  #     ContentUri: ffmpeg-layer/
-  #     CompatibleRuntimes:
-  #       - python3.11
-  #     CompatibleArchitectures:
-  #       - x86_64
-  #     RetentionPolicy: Retain
-
   # --- Simple Buckets without notifications first ---
   InputBucket:
     Type: AWS::S3::Bucket
@@ -177,12 +180,12 @@ Resources:
       Environment:
         Variables:
           OUTPUT_BUCKET: !Ref ProcessedBucket
-          DB_HOST: !Sub "{{resolve:ssm:/sam-app/${Environment}/db/host}}"
-          DB_PORT: !Sub "{{resolve:ssm:/sam-app/${Environment}/db/port}}"
-          DB_NAME: !Sub "{{resolve:ssm:/sam-app/${Environment}/db/name}}"
-          DB_USER: !Sub "{{resolve:ssm:/sam-app/${Environment}/db/user}}"
-          DB_PASSWORD: !Sub "{{resolve:ssm:/sam-app/${Environment}/db/password}}"
-          OPENAI_API_KEY: !Sub "{{resolve:ssm:/sam-app/${Environment}/openai/api-key}}"
+          DB_HOST: !Ref DbHost
+          DB_PORT: !Ref DbPort
+          DB_NAME: !Ref DbName
+          DB_USER: !Ref DbUser
+          DB_PASSWORD: !Ref DbPassword
+          OPENAI_API_KEY: !Ref OpenAIApiKey
       PackageType: Image
       ImageUri: 988360969626.dkr.ecr.us-east-2.amazonaws.com/automated-rag-dev:latest
       Architectures:
@@ -193,8 +196,6 @@ Resources:
             BucketName: !Ref ParsedBucket
         - S3WritePolicy:
             BucketName: !Ref ProcessedBucket
-        - SSMParameterReadPolicy:
-            ParameterName: "/sam-app/${Environment}/*"
         - Statement:
             Effect: Allow
             Action:
@@ -212,15 +213,13 @@ Resources:
         - x86_64
       Environment:
         Variables:
-          OPENAI_API_KEY: !Sub "{{resolve:ssm:/sam-app/${Environment}/openai/api-key}}"
+          OPENAI_API_KEY: !Ref OpenAIApiKey
           OUTPUT_BUCKET: !Ref ParsedBucket
       Policies:
         - S3WritePolicy:
             BucketName: !Ref ParsedBucket
         - SQSPollerPolicy:
             QueueName: !GetAtt MultimediaIngestQueue.QueueName
-        - SSMParameterReadPolicy:
-            ParameterName: "/sam-app/${Environment}/*"
         - Statement:
             Effect: Allow
             Action:

@@ -60,4 +60,10 @@ jobs:
             --stack-name sam-app-hello-world \
             --capabilities CAPABILITY_IAM \
             --region us-east-2 \
-            --parameter-overrides Environment=dev
+            --parameter-overrides Environment=dev \
+              OpenAIApiKey=${{ secrets.OPENAI_API_KEY }} \
+              DbHost=${{ secrets.DB_HOST }} \
+              DbPort=${{ secrets.DB_PORT }} \
+              DbName=${{ secrets.DEV_DB_NAME }} \
+              DbUser=${{ secrets.DEV_DB_USER }} \
+              DbPassword=${{ secrets.DEV_DB_PASSWORD }}
