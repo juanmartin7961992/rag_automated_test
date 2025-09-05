@@ -2,13 +2,11 @@ from datetime import datetime
 import io
 import uuid
 import boto3, json, os
-import os
 
 from langchain_openai import OpenAIEmbeddings
 from chatbot.rag.pgvector_dual import DualPGVector
 from chatbot.utils.rag_utils import load_vectorizer
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-
 
 s3 = boto3.client("s3")
 # s3 = boto3.client('s3', endpoint_url='http://host.docker.internal:4566')
@@ -21,11 +19,13 @@ splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
 
 OUTPUT_BUCKET = os.getenv("OUTPUT_BUCKET")
 
+
 def lambda_handler(event, context):
     print("S3 endpoint URL:", s3.meta.endpoint_url)
+    print("Result will be saved in: ", OUTPUT_BUCKET)
 
-    print("Result will saved in: ", OUTPUT_BUCKET)
     successfull_added = []
+
     if "Records" in event:  # S3 event
         for record in event["Records"]:
             bucket = record["s3"]["bucket"]["name"]
@@ -38,7 +38,9 @@ def lambda_handler(event, context):
             content = obj["Body"].read().decode("utf-8")
             json_data = json.loads(content)
 
-
+            # Ensure json_data is always a list
+            if isinstance(json_data, dict):
+                json_data = [json_data]
 
             print(f"Loaded {len(json_data)} records from {bucket}/{key}")
 
@@ -46,8 +48,6 @@ def lambda_handler(event, context):
             AWS Lambda handler to process and upload JSON data to the vector store.
             """
 
-            # Use event parameters or defaults
-            # json_path = event.get("json_path", "/var/task/assets/digital_promise_to_upload.json")
             batch_size = int(event.get("batch_size", 300))
 
             # Load vectorizer (path inside container)
@@ -76,48 +76,40 @@ def lambda_handler(event, context):
                 connection=connection_string,
             )
 
-            
-            new_json_data = []
+            # Split each record and create new items
+            for record_obj in json_data:
+                text_chunks = splitter.split_text(record_obj.get("text", ""))
+                resource_id = record_obj.get("uuid")
 
-            text_chunks = splitter.split_text(json_data.get("text", ""))
-            resource_id = json_data.get("uuid")
-            
-            for idx, chunk in enumerate(text_chunks):
-                new_item = {
-                    "uuid": str(uuid.uuid4()),
-                    "text": chunk,
-                    "metadata": {
-                        **json_data.get("metadata", {}),  # copy existing metadata
-                        "id": f"{resource_id}_{idx}"  # update id to resource_id + chunk index
-                    },
-                }
-                new_json_data.append(new_item)
+                for idx, chunk in enumerate(text_chunks):
+                    new_item = {
+                        "uuid": str(uuid.uuid4()),
+                        "text": chunk,
+                        "metadata": {
+                            **record_obj.get("metadata", {}),  # copy existing metadata
+                            "id": f"{resource_id}_{idx}"       # update id to resource_id + chunk index
+                        },
+                    }
+                    successfull_added.append(new_item)
 
-            json_data = new_json_data
-
-            # Load JSON data
-            # json_data = load_json(json_path)
-            total_items = len(json_data)
-
+            # Add in batches to vector store
+            total_items = len(successfull_added)
             for i in range(0, total_items, batch_size):
-                batch = json_data[i:i + batch_size]
+                batch = successfull_added[i:i + batch_size]
                 texts = [item.get("text", "") for item in batch]
                 metadatas = [item.get("metadata", {}) for item in batch]
                 ids = [item.get("uuid") for item in batch]
                 idsSaved = vector_store.add_texts(texts=texts, metadatas=metadatas, ids=ids)
                 print(f"Batch {i // batch_size + 1}: {len(idsSaved)} records added.")
-                
-                # 
-                successfull_added.extend(batch)
 
             # Convert JSON to string
             json_string = json.dumps(successfull_added, ensure_ascii=False, indent=2)
 
-            # Generate new S3 key (e.g., append _processed to original file name)
+            # Generate new S3 key (append _processed with timestamp)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             processed_key = f"ingested/{key.replace('.json', '')}_{timestamp}.json"
 
-            # Upload back to S3
+            # Upload processed JSON to S3
             s3.put_object(
                 Bucket=OUTPUT_BUCKET,
                 Key=processed_key,
