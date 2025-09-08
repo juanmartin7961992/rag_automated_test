@@ -1,114 +1,196 @@
+from __future__ import annotations
 from datetime import datetime
 import json
 import os
+from urllib.parse import urlparse
 import uuid
 import boto3
+from bs4 import BeautifulSoup
 import pandas as pd
-from trafilatura import fetch_url, extract
+from trafilatura import fetch_url
 from unidecode import unidecode
 import io
 import logging
+from dataclasses import dataclass, asdict
+from typing import Callable
 
-s3 = boto3.client('s3')
-# s3 = boto3.client('s3', endpoint_url='http://host.docker.internal:4566')
-output_bucket = os.getenv("OUTPUT_BUCKET") 
+# ------------------ Setup ------------------ #
+s3 = boto3.client("s3")
+OUTPUT_BUCKET = os.getenv("OUTPUT_BUCKET")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def get_one(url):
-    """Fetches and extracts text from a URL using trafilatura."""
-    try:
-        downloaded = fetch_url(url)
-        if not downloaded:
-            return None
-        result = json.loads(extract(downloaded, output_format="json", include_links=True))
-        result["html"] = downloaded
-        result["cleantext"] = extract(downloaded)  # plain text
-        return result
-    except Exception as e:
-        logger.error(f"Error extracting content from {url}: {e}")
-        raise  # propagate to Lambda so it fails
 
+# ------------------ Helpers ------------------ #
+class ScraperError(Exception):
+    """Custom exception for scraper errors."""
+
+
+def normalize_hostname(url: str) -> str:
+    """Return a hostname without scheme, port, or leading www."""
+    hostname = urlparse(url).hostname or ""
+    return hostname.lower().removeprefix("www.")
+
+
+def fetch_and_select(url: str, selector: str) -> str:
+    """Fetch HTML, parse with BeautifulSoup, and return text from selector."""
+    downloaded = fetch_url(url)
+    if not downloaded:
+        raise ScraperError(f"No content fetched for {url}")
+
+    soup = BeautifulSoup(downloaded, "html.parser")
+    element = soup.select_one(selector)
+    if not element:
+        raise ScraperError(f"No matching block found for {url} with {selector}")
+
+    return element.get_text(separator="\n", strip=True)
+
+
+# ------------------ Scrapers ------------------ #
+def scrape_allinforinclusiveed(url: str) -> str:
+    return fetch_and_select(url, "div.sqs-html-content[data-sqsp-text-block-content]")
+
+
+def scrape_neuhaus(url: str) -> str:
+    return fetch_and_select(url, "article")
+
+
+SCRAPER_MAP: dict[str, Callable[[str], str]] = {
+    "allinforinclusiveed.org": scrape_allinforinclusiveed,
+    "neuhaus.org": scrape_neuhaus,
+}
+
+
+def extract_text(url: str) -> dict | None:
+    """Route a URL to the proper scraper based on hostname."""
+    hostname = normalize_hostname(url)
+    scraper = SCRAPER_MAP.get(hostname)
+
+    if not scraper:
+        logger.error(f"Hostname not allowed: {hostname}. Add to SCRAPER_MAP.")
+        raise Exception(f"Hostname not allowed: {hostname}. Add to SCRAPER_MAP.")
+
+    try:
+        clean_text = scraper(url)
+    except ScraperError as e:
+        logger.error(str(e))
+        raise
+
+    return {"cleantext": clean_text}
+
+
+# ------------------ Document Model ------------------ #
+@dataclass
+class Document:
+    uuid: str
+    text: str
+    source: int
+    metadata: dict
+    csvInputKey: str
+
+    @classmethod
+    def from_raw(cls, cleantext: str, title: str, url: str, csv_key: str, source: int) -> "Document":
+        return cls(
+            uuid=str(uuid.uuid4()),
+            text=unidecode(cleantext),
+            source=source,
+            metadata={
+                "title": unidecode(title),
+                "url": url,
+                "type": "html",
+            },
+            csvInputKey=csv_key,
+        )
+
+
+# ------------------ Output Writers ------------------ #
+def write_jsonl(docs: list[Document]) -> str:
+    buffer = io.StringIO()
+    for doc in docs:
+        json.dump(asdict(doc), buffer)
+        buffer.write("\n")
+    return buffer.getvalue()
+
+
+def write_csv(docs: list[Document]) -> str:
+    records = [{"id": d.source, "url": d.metadata["url"], "title": d.metadata["title"]} for d in docs]
+    buffer = io.StringIO()
+    pd.DataFrame(records).drop_duplicates().to_csv(buffer, index=False)
+    return buffer.getvalue()
+
+
+def upload_to_s3(base_name: str, jsonl_data: str, csv_data: str) -> None:
+    s3.put_object(
+        Bucket=OUTPUT_BUCKET,
+        Key=f"{base_name}.jsonl",
+        Body=jsonl_data,
+        ContentType="application/json",
+    )
+    s3.put_object(
+        Bucket=OUTPUT_BUCKET,
+        Key=f"{base_name}_records.csv",
+        Body=csv_data,
+        ContentType="text/csv",
+    )
+
+
+# ------------------ Lambda Handler ------------------ #
 def lambda_handler(event, context):
-    # Extract records from SQS event
-    logger.info(f"Start HTML parse function")
-    sqs_records = event['Records']
-    logger.info(f"Received records: {len(sqs_records)}")
-    logger.info(f"Records: {sqs_records}")
-    
-    # Convert SQS messages into a DataFrame-like structure
-    records_list = []
-    for record in sqs_records:
-        body = json.loads(record['body'])
-        # Expect body to contain "title" and "url"
-        records_list.append({
+    logger.info("Start HTML parse function")
+
+    # Parse SQS records into DataFrame
+    sqs_records = event.get("Records", [])
+    records_list = [
+        {
             "CsvInputKey": body.get("csv_input_key", ""),
             "Name": body.get("title", ""),
-            "URL": body.get("url", "")
-        })
-    
+            "URL": body.get("url", ""),
+        }
+        for record in sqs_records
+        for body in [json.loads(record["body"])]
+    ]
     df = pd.DataFrame(records_list)
 
-    OFFSET = 0  # default, could be passed via event if needed
-
-    # Fetch and extract URLs
-    outs1 = []
-    for url in df["URL"]:
-        out = get_one(url)
-        outs1.append(out)
-
-    # Attach metadata
-    for o, url, title, csvInputKey in zip(outs1, df["URL"], df["Name"], df["CsvInputKey"]):
-        if o:
-            o["url"] = url
-            o["title"] = title
-            o["csvInputKey"] = csvInputKey
-
-    # Build structured docs
-    docs = []
-    for idx, o in enumerate(outs1):
-        if not o:
+    # Extract documents
+    docs: list[Document] = []
+    for _, row in df.iterrows():
+        extracted = extract_text(row["URL"])
+        if not extracted:
             continue
-        csvInputKey = o.get("csvInputKey", "")
-        tmp = {
-            "uuid": str(uuid.uuid4()),
-            "text": unidecode(o.get("cleantext", "")),
-            "source": len(docs) + OFFSET,
-            "metadata": {
-                "title": unidecode(o.get("title", "")),
-                "url": o.get("url", ""),
-                "type": "html",
-            }
-        }
-        docs.append(tmp)
+        docs.append(
+            Document.from_raw(
+                extracted["cleantext"], row["Name"], row["URL"], row["CsvInputKey"], len(docs)
+            )
+        )
 
-    # Prepare output JSONL in-memory
-    jsonl_buffer = io.StringIO()
-    for doc in docs:
-        json.dump(doc, jsonl_buffer)
-        jsonl_buffer.write("\n")
-    jsonl_buffer.seek(0)
+    if not docs:
+        return {"statusCode": 204, "body": json.dumps({"message": "No documents processed"})}
 
-    # Prepare CSV of records in-memory
-    records_out = [{"id": d["source"], "url": d["metadata"]["url"], "title": d["metadata"]["title"]} for d in docs]
-    csv_buffer = io.StringIO()
-    pd.DataFrame(records_out).drop_duplicates().to_csv(csv_buffer, index=False)
-    csv_buffer.seek(0)
-
-    # Save outputs back to S3
+    # Build base filename
     now = datetime.now()
-    time_str = now.strftime("%H_%M_%S") + f".{now.microsecond}"
-    base_name = f"{csvInputKey}/{now.date()}/{time_str}_html"
-    s3.put_object(Bucket=output_bucket, Key=f"{base_name}.jsonl", Body=jsonl_buffer.getvalue(), ContentType="application/json")
-    # s3.put_object(Bucket=output_bucket, Key=f"{base_name}_records.csv", Body=csv_buffer.getvalue(), ContentType="text/csv")
+    time_str = f"{now.strftime('%H_%M_%S')}.{now.microsecond}"
+    base_name = f"{docs[0].csvInputKey}/{now.date()}/{time_str}_html"
+
+    # Write + upload
+    upload_to_s3(base_name, write_jsonl(docs), write_csv(docs))
 
     return {
         "statusCode": 200,
-        "body": json.dumps({
-            "message": "Scraping completed",
-            "jsonl_file": f"{base_name}.jsonl",
-            "csv_file": f"{base_name}_records.csv",
-            "processed": len(docs)
-        })
+        "body": json.dumps(
+            {
+                "message": "Scraping completed",
+                "jsonl_file": f"{base_name}.jsonl",
+                "csv_file": f"{base_name}_records.csv",
+                "processed": len(docs),
+            }
+        ),
     }
+
+
+# ------------------ Local Debug ------------------ #
+if __name__ == "__main__":
+    # test_url = "https://neuhaus.org/addressing-dyslexia-in-the-classroom/"
+    test_url = "https://www.allinforinclusiveed.org/podcastarchive/episode-1-inclusive-education-in-new-jersey"
+    result = extract_text(test_url)
+    print(result and result["cleantext"][:300])
