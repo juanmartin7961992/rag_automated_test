@@ -63,7 +63,6 @@ jobs:
         # This command packages and deploys your application to AWS
         run: |
           sam deploy \
-            --template chatbot/rag/rag_automated/template.yaml \
             --no-confirm-changeset --no-fail-on-empty-changeset \
             --resolve-image-repos \
             --stack-name dev-rag-automated \
