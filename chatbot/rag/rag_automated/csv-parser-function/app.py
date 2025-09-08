@@ -7,6 +7,8 @@ import boto3
 import logging
 from datetime import datetime
 
+import urllib
+
 s3 = boto3.client('s3')
 # s3 = boto3.client('s3', endpoint_url='http://host.docker.internal:4566')
 
@@ -28,7 +30,7 @@ def lambda_handler(event, context):
     # Extract bucket and key from the event
     record = event['Records'][0]['s3']
     bucket = record['bucket']['name']
-    key = record['object']['key']
+    key = urllib.parse.unquote_plus(record['object']['key'])
 
     logger.info(f"File to download: {bucket}, {key}")
 
