@@ -4,6 +4,7 @@ import uuid
 import boto3
 import os
 import tempfile
+from moviepy import VideoFileClip
 import requests
 from urllib.parse import urlparse, parse_qs
 import yt_dlp
@@ -14,6 +15,10 @@ import aiofiles
 from contextlib import asynccontextmanager, contextmanager
 import logging
 from typing import Optional, List, Dict, Any
+import requests
+from pydub import AudioSegment
+from io import BytesIO
+import tempfile
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -33,7 +38,7 @@ MAX_FILE_SIZE = 25 * 1024 * 1024  # 25MB
 CHUNK_LENGTH_SEC = 60
 MAX_CONCURRENCY = 5
 SUPPORTED_AUDIO_EXTENSIONS = ('.mp3', '.m4a', '.wav', '.flac', '.ogg')
-
+SUPPORTED_VIDEO_EXTENSIONS = ( ".mp4", ".mov", "wm.v", ".webm", ".avi")
 
 def clean_youtube_url(url: str) -> str:
     """
@@ -75,48 +80,24 @@ def download_direct_audio(url: str):
 
 
 def download_media(url: str) -> str:
-    """Download media from URL (YouTube, direct audio, or direct video)."""
+    """Download media from URL (YouTube or direct audio)."""
     url = clean_youtube_url(url)
 
-    # Direct audio case
+    # Direct audio file case
     if url.endswith(SUPPORTED_AUDIO_EXTENSIONS):
         with download_direct_audio(url) as file_path:
             return file_path
+        
+    if url.endswith(SUPPORTED_VIDEO_EXTENSIONS):
+        return convert_mp4_url_to_audio_pydub(url)
 
-    # Direct video (.mp4 etc.) → extract audio
-    if url.endswith(('.mp4', '.mov', '.mkv', '.avi', '.webm')):
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'outtmpl': os.path.join(tempfile.gettempdir(), '%(id)s.%(ext)s'),
-            'quiet': True,
-            'noplaylist': True,
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'wav',
-                'preferredquality': '192',
-            }],
-            'socket_timeout': 30,
-            'retries': 3,
-        }
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                filename = ydl.prepare_filename(info)
-                # yt-dlp will have created .wav instead of video
-                audio_file = os.path.splitext(filename)[0] + ".wav"
-                if not os.path.exists(audio_file):
-                    raise FileNotFoundError(f"Expected {audio_file} not found")
-                return audio_file
-        except Exception as e:
-            raise Exception(f"Failed to extract audio from video: {str(e)}")
-
-    # YouTube case
+    # YouTube/audio-only case
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': os.path.join(tempfile.gettempdir(), '%(id)s.%(ext)s'),
         'quiet': True,
         'noplaylist': True,
-        'postprocessors': [],
+        'postprocessors': [],  # no ffmpeg
         'socket_timeout': 30,
         'retries': 3,
     }
@@ -125,12 +106,32 @@ def download_media(url: str) -> str:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
+
             if not os.path.exists(filename):
-                raise FileNotFoundError(f"yt-dlp reported {filename} but not found")
+                raise FileNotFoundError(
+                    f"yt-dlp reported filename {filename} but it was not created"
+                )
+
             return filename
     except Exception as e:
         raise Exception(f"Failed to download audio: {str(e)}")
 
+def convert_mp4_url_to_audio_pydub(url):
+    # Download MP4 to temp file
+    response = requests.get(url)
+    response.raise_for_status()
+
+    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as temp_video:
+        temp_video.write(response.content)
+        temp_video_path = temp_video.name
+
+    # Load video and extract audio
+    clip = VideoFileClip(temp_video_path)
+    output_filename = f"{uuid.uuid4()}.mp3"
+    clip.audio.write_audiofile(output_filename)  # moviepy handles ffmpeg internally
+    clip.close()
+
+    return output_filename
 
 async def transcribe_audio_chunk(file_path: str) -> str:
     """Transcribe a single audio chunk."""
@@ -290,3 +291,14 @@ def lambda_handler(event, context):
             raise
 
     return {"statusCode": 200, "body": json.dumps(results)}
+
+
+
+# ------------------ Local Debug ------------------ #
+if __name__ == "__main__":
+    url = "https://neuhaus.azureedge.net/library/videos/2020/08/Questioning-Strategies-to-Deepen-Comprehension.mp4"
+    # audio_file_path = convert_mp4_url_to_audio_pydub(url)
+    audio_file_path = download_media(url)
+    print("Pinchi", audio_file_path)
+    transcription = asyncio.run(transcribe_audio(audio_file_path))
+    print(f"Pinchi transcription: {transcription}")
