@@ -63,6 +63,7 @@ jobs:
         # This command packages and deploys your application to AWS
         run: |
           sam deploy \
+            --resolve-s3
             --no-confirm-changeset --no-fail-on-empty-changeset \
             --resolve-image-repos \
             --stack-name dev-rag-automated \
