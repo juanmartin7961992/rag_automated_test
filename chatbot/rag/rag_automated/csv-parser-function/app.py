@@ -30,6 +30,8 @@ def lambda_handler(event, context):
     bucket = record['bucket']['name']
     key = record['object']['key']
 
+    logger.info(f"File to download: {bucket}, {key}")
+
     # Read CSV from S3
     obj = s3.get_object(Bucket=bucket, Key=key)
     csv_content = obj['Body'].read().decode('utf-8')
