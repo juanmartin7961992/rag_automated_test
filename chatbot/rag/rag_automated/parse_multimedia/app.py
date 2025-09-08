@@ -75,21 +75,48 @@ def download_direct_audio(url: str):
 
 
 def download_media(url: str) -> str:
-    """Download media from URL (YouTube or direct audio)."""
+    """Download media from URL (YouTube, direct audio, or direct video)."""
     url = clean_youtube_url(url)
 
-    # Direct audio file case
+    # Direct audio case
     if url.endswith(SUPPORTED_AUDIO_EXTENSIONS):
         with download_direct_audio(url) as file_path:
             return file_path
 
-    # YouTube/audio-only case
+    # Direct video (.mp4 etc.) → extract audio
+    if url.endswith(('.mp4', '.mov', '.mkv', '.avi', '.webm')):
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'outtmpl': os.path.join(tempfile.gettempdir(), '%(id)s.%(ext)s'),
+            'quiet': True,
+            'noplaylist': True,
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'wav',
+                'preferredquality': '192',
+            }],
+            'socket_timeout': 30,
+            'retries': 3,
+        }
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                filename = ydl.prepare_filename(info)
+                # yt-dlp will have created .wav instead of video
+                audio_file = os.path.splitext(filename)[0] + ".wav"
+                if not os.path.exists(audio_file):
+                    raise FileNotFoundError(f"Expected {audio_file} not found")
+                return audio_file
+        except Exception as e:
+            raise Exception(f"Failed to extract audio from video: {str(e)}")
+
+    # YouTube case
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': os.path.join(tempfile.gettempdir(), '%(id)s.%(ext)s'),
         'quiet': True,
         'noplaylist': True,
-        'postprocessors': [],  # no ffmpeg
+        'postprocessors': [],
         'socket_timeout': 30,
         'retries': 3,
     }
@@ -98,12 +125,8 @@ def download_media(url: str) -> str:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
-
             if not os.path.exists(filename):
-                raise FileNotFoundError(
-                    f"yt-dlp reported filename {filename} but it was not created"
-                )
-
+                raise FileNotFoundError(f"yt-dlp reported {filename} but not found")
             return filename
     except Exception as e:
         raise Exception(f"Failed to download audio: {str(e)}")
