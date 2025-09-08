@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import io
 import uuid
 import boto3, json, os
@@ -87,7 +87,8 @@ def lambda_handler(event, context):
                         "text": chunk,
                         "metadata": {
                             **record_obj.get("metadata", {}),  # copy existing metadata
-                            "id": f"{resource_id}_{idx}"       # update id to resource_id + chunk index
+                            "id": f"{resource_id}_{idx}",       # update id to resource_id + chunk index
+                            "created": datetime.now(timezone.utc)
                         },
                     }
                     successfull_added.append(new_item)
