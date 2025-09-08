@@ -120,18 +120,12 @@ def write_csv(docs: list[Document]) -> str:
     return buffer.getvalue()
 
 
-def upload_to_s3(base_name: str, jsonl_data: str, csv_data: str) -> None:
+def upload_to_s3(base_name: str, jsonl_data: str) -> None:
     s3.put_object(
         Bucket=OUTPUT_BUCKET,
         Key=f"{base_name}.jsonl",
         Body=jsonl_data,
         ContentType="application/json",
-    )
-    s3.put_object(
-        Bucket=OUTPUT_BUCKET,
-        Key=f"{base_name}_records.csv",
-        Body=csv_data,
-        ContentType="text/csv",
     )
 
 
@@ -173,7 +167,7 @@ def lambda_handler(event, context):
     base_name = f"{docs[0].csvInputKey}/{now.date()}/{time_str}_html"
 
     # Write + upload
-    upload_to_s3(base_name, write_jsonl(docs), write_csv(docs))
+    upload_to_s3(base_name, write_jsonl(docs))
 
     return {
         "statusCode": 200,
