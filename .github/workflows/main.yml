@@ -24,6 +24,13 @@ env:
   RAG_AUTOMATED_DOCKER_REGISTRY: ${{vars.DEV_RAG_AUTOMATED_DOCKER_REGISTRY}}
   RAG_AUTOMATED_DOCKER_IMAGE_NAME: ${{vars.DEV_RAG_AUTOMATED_DOCKER_IMAGE_NAME}}
 
+  DB_HOST: ${{secrets.DEV_DB_HOST}}
+  DB_PORT: ${{secrets.DEV_DB_PORT}}
+  DB_NAME: ${{secrets.DEV_DB_NAME}}
+  DB_USER: ${{secrets.DEV_DB_USER}}
+  DB_PASSWORD: ${{secrets.DEV_DB_PASSWORD}}
+  OPENAI_API_KEY: ${{secrets.OPENAI_API_KEY}}
+
 jobs:
   rag-automated-build-and-deploy:
     runs-on: ubuntu-latest
@@ -101,11 +108,12 @@ jobs:
             --region $AWS_REGION \
             --parameter-overrides "
               Environment=$ENVIRONMENT
-              OpenAIApiKey=${{ secrets.OPENAI_API_KEY }}
-              DbHost=${{ secrets.DB_HOST }}
-              DbName=${{ secrets.DEV_DB_NAME }}
-              DbUser=${{ secrets.DEV_DB_USER }}
-              DbPassword=${{ secrets.DEV_DB_PASSWORD }}
+              OpenAIApiKey=${{ env.OPENAI_API_KEY }}
+              DbHost=${{ env.DB_HOST }}
+              DbPort=${env.DB_PORT}
+              DbName=${{ env.DB_NAME }}
+              DbUser=${{ env.DB_USER }}
+              DbPassword=${{ env.DB_PASSWORD }}
               RagImageTag=${{ env.IMAGE_TAG }}
             "
 
