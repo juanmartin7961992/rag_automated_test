@@ -21,6 +21,8 @@ env:
   ENVIRONMENT: dev
   SAM_TEMPLATE: chatbot/rag/rag_automated/template.yaml
   DOCKERFILE: chatbot/rag/rag_automated/rag_embedding_function/dockerfile-pgvector_dual
+  RAG_AUTOMATED_DOCKER_REGISTRY: ${{vars.DEV_RAG_AUTOMATED_DOCKER_REGISTRY}}
+  RAG_AUTOMATED_DOCKER_IMAGE_NAME: ${{vars.DEV_RAG_AUTOMATED_DOCKER_IMAGE_NAME}}
 
 jobs:
   rag-automated-build-and-deploy:
@@ -68,8 +70,8 @@ jobs:
           IMAGE_TAG="${TIMESTAMP}-${COMMIT_SHA_SHORT}"
 
           docker buildx build \
-            -t ${{ vars.RAG_AUTOMATED_DOCKER_REGISTRY }}/${{ vars.RAG_AUTOMATED_DOCKER_IMAGE_NAME }}:latest \
-            -t ${{ vars.RAG_AUTOMATED_DOCKER_REGISTRY }}/${{ vars.RAG_AUTOMATED_DOCKER_IMAGE_NAME }}:$IMAGE_TAG \
+            -t ${{ env.RAG_AUTOMATED_DOCKER_REGISTRY }}/${{ env.RAG_AUTOMATED_DOCKER_IMAGE_NAME }}:latest \
+            -t ${{ env.RAG_AUTOMATED_DOCKER_REGISTRY }}/${{ env.RAG_AUTOMATED_DOCKER_IMAGE_NAME }}:$IMAGE_TAG \
             --platform linux/amd64 \
             -f $DOCKERFILE \
             --provenance=false \
