@@ -7,6 +7,10 @@ on:
     branches:
       - rag_automated # Trigger only on this branch
 
+permissions:
+  id-token: write # Required for OIDC
+  contents: read # Required to checkout code
+
 concurrency:
   group: deploy-rag-automated
   cancel-in-progress: true # Prevent overlapping deploys
