@@ -9,14 +9,6 @@ Globals:
       LogFormat: JSON
 
 Parameters:
-  Environment:
-    Type: String
-    AllowedValues:
-      - dev
-      - uat
-      - prod
-    Description: Deployment environment
-
   OpenAIApiKey:
     Type: String
     NoEcho: true

@@ -107,10 +107,9 @@ jobs:
             --capabilities CAPABILITY_IAM \
             --region $AWS_REGION \
             --parameter-overrides "
-              Environment=$ENVIRONMENT
               OpenAIApiKey=${{ env.OPENAI_API_KEY }}
               DbHost=${{ env.DB_HOST }}
-              DbPort=${env.DB_PORT}
+              DbPort=${{env.DB_PORT}}
               DbName=${{ env.DB_NAME }}
               DbUser=${{ env.DB_USER }}
               DbPassword=${{ env.DB_PASSWORD }}
