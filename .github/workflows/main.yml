@@ -53,10 +53,13 @@ jobs:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github_role
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to Amazon ECR
-        run: |
-          aws ecr get-login-password --region $AWS_REGION \
-            | docker login --username AWS --password-stdin ${{ vars.RAG_AUTOMATED_DOCKER_REGISTRY }}
+      # - name: Login to Amazon ECR
+      #   run: |
+      #     aws ecr get-login-password --region $AWS_REGION \
+      #       | docker login --username AWS --password-stdin ${{ vars.RAG_AUTOMATED_DOCKER_REGISTRY }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and Push Docker image
         run: |
