@@ -113,6 +113,8 @@ jobs:
               DbName=${{ env.DB_NAME }}
               DbUser=${{ env.DB_USER }}
               DbPassword=${{ env.DB_PASSWORD }}
+              RagRegistry=${{env.RAG_AUTOMATED_DOCKER_REGISTRY}}
+              RagImageName=${{env.RAG_AUTOMATED_DOCKER_IMAGE_NAME}}
               RagImageTag=${{ env.IMAGE_TAG }}
             "
 

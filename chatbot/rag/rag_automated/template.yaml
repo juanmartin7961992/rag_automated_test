@@ -38,6 +38,14 @@ Parameters:
     Type: String
     Default: latest
 
+  RagRegistry:
+    Type: String
+    NoEcho: true
+
+  RagImageName:
+    Type: String
+    NoEcho: true
+
 Resources:
   # --- Simple Buckets without notifications first ---
   InputBucket:
@@ -191,7 +199,7 @@ Resources:
           DB_PASSWORD: !Ref DbPassword
           OPENAI_API_KEY: !Ref OpenAIApiKey
       PackageType: Image
-      ImageUri: !Sub 988360969626.dkr.ecr.us-east-2.amazonaws.com/automated-rag-dev:${RagImageTag}
+      ImageUri: !Sub ${RagRegistry}/${RagImageName}:${RagImageTag}
       Architectures:
         - x86_64
       MemorySize: 512
