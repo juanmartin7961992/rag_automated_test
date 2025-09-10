@@ -5,14 +5,23 @@ name: Deploy SAM Application
 on:
   push:
     branches:
-      - main # Trigger the workflow on push to the main branch
+      - rag_automated # Trigger only on this branch
+
+concurrency:
+  group: deploy-rag-automated
+  cancel-in-progress: true # Prevent overlapping deploys
+
+env:
+  AWS_REGION: us-east-2
+  STACK_NAME: dev-rag-automated
+  ENVIRONMENT: dev
+  SAM_TEMPLATE: chatbot/rag/rag_automated/template.yaml
+  DOCKERFILE: chatbot/rag/rag_automated/rag_embedding_function/dockerfile-pgvector_dual
 
 jobs:
   rag-automated-build-and-deploy:
     runs-on: ubuntu-latest
-    environment:
-      name: dev
-      url: https://your-app-domain.com
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -20,62 +29,80 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11" # Or your project's python version
+          python-version: "3.11"
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
       - name: Set up SAM CLI
         uses: aws-actions/setup-sam@v2
 
+      # ✅ Prefer GitHub OIDC over static keys (requires AWS role setup)
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github_role
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
         run: |
-          aws ecr get-login-password --region us-east-2 \
-            | docker login --username AWS --password-stdin ${{vars.RAG_AUTOMATED_DOCKER_REGISTRY}}
+          aws ecr get-login-password --region $AWS_REGION \
+            | docker login --username AWS --password-stdin ${{ vars.RAG_AUTOMATED_DOCKER_REGISTRY }}
 
       - name: Build and Push Docker image
         run: |
-          # Generate unique tag (timestamp + commit SHA)
           TIMESTAMP=$(date +%Y%m%d%H%M%S)
           COMMIT_SHA_SHORT=$(git rev-parse --short HEAD)
-          DEV_RAG_IMAGE_TAG="${TIMESTAMP}-${COMMIT_SHA_SHORT}"
+          IMAGE_TAG="${TIMESTAMP}-${COMMIT_SHA_SHORT}"
 
           docker buildx build \
-            -t ${{vars.RAG_AUTOMATED_DOCKER_REGISTRY}}/${{vars.RAG_AUTOMATED_DOCKER_IMAGE_NAME}}:latest \
-            -t ${{vars.RAG_AUTOMATED_DOCKER_REGISTRY}}/${{vars.RAG_AUTOMATED_DOCKER_IMAGE_NAME}}:$DEV_RAG_IMAGE_TAG \
+            -t ${{ vars.RAG_AUTOMATED_DOCKER_REGISTRY }}/${{ vars.RAG_AUTOMATED_DOCKER_IMAGE_NAME }}:latest \
+            -t ${{ vars.RAG_AUTOMATED_DOCKER_REGISTRY }}/${{ vars.RAG_AUTOMATED_DOCKER_IMAGE_NAME }}:$IMAGE_TAG \
             --platform linux/amd64 \
-            -f chatbot/rag/rag_automated/rag_embedding_function/dockerfile-pgvector_dual \
+            -f $DOCKERFILE \
             --provenance=false \
             --push .
 
-          # Store the image tag for SAM deployment
-          echo "DEV_RAG_IMAGE_TAG=$DEV_RAG_IMAGE_TAG" >> $GITHUB_ENV
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Cache SAM build artifacts
+        uses: actions/cache@v4
+        with:
+          path: .aws-sam
+          key: ${{ runner.os }}-sam-${{ hashFiles(env.SAM_TEMPLATE) }}
+          restore-keys: |
+            ${{ runner.os }}-sam-
 
       - name: Build SAM application
-        # This command builds the source of your application
-        run: sam build --template chatbot/rag/rag_automated/template.yaml
+        run: sam build --template $SAM_TEMPLATE
 
       - name: Deploy SAM application
-        # This command packages and deploys your application to AWS
         run: |
           sam deploy \
             --resolve-s3 \
             --no-confirm-changeset --no-fail-on-empty-changeset \
             --resolve-image-repos \
-            --stack-name dev-rag-automated \
+            --stack-name $STACK_NAME \
             --capabilities CAPABILITY_IAM \
-            --region us-east-2 \
+            --region $AWS_REGION \
             --parameter-overrides "
-              Environment=dev
+              Environment=$ENVIRONMENT
               OpenAIApiKey=${{ secrets.OPENAI_API_KEY }}
               DbHost=${{ secrets.DB_HOST }}
-              DbPort=${{ secrets.DB_PORT }}
               DbName=${{ secrets.DEV_DB_NAME }}
               DbUser=${{ secrets.DEV_DB_USER }}
               DbPassword=${{ secrets.DEV_DB_PASSWORD }}
-              RagImageTag=${{ env.DEV_RAG_IMAGE_TAG }}
+              RagImageTag=${{ env.IMAGE_TAG }}
             "
+
+      - name: Upload SAM deployment logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sam-deploy-logs
+          path: .aws-sam/build
