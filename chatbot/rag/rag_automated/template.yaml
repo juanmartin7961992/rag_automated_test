@@ -46,9 +46,9 @@ Parameters:
     Type: String
     NoEcho: true
 
-  VpcId:
-  Type: AWS::EC2::VPC::Id
-  Description: Existing VPC ID where RDS is located
+  # VpcId:
+  # Type: AWS::EC2::VPC::Id
+  # Description: Existing VPC ID where RDS is located
 
   PrivateSubnet1Id:
     Type: AWS::EC2::Subnet::Id

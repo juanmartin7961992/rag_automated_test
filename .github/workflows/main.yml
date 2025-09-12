@@ -119,11 +119,10 @@ jobs:
               RagRegistry=${{env.RAG_AUTOMATED_DOCKER_REGISTRY}}
               RagImageName=${{env.RAG_AUTOMATED_DOCKER_IMAGE_NAME}}
               RagImageTag=${{ env.IMAGE_TAG }}
-              VpcId="vpc-07f9344620b126698" \
-              PrivateSubnet1Id="subnet-086b6b040206694e5" \
-              PrivateSubnet2Id="subnet-0c27c966a42433ffa" \
-              PrivateSubnet3Id="subnet-034c912787c048003" \
-              LambdaSecurityGroupId="sg-05b1521809248aa2f"
+              PrivateSubnet1Id=subnet-086b6b040206694e5
+              PrivateSubnet2Id=subnet-0c27c966a42433ffa
+              PrivateSubnet3Id=subnet-034c912787c048003
+              LambdaSecurityGroupId=sg-05b1521809248aa2f
             "
 
       - name: Upload SAM deployment logs
