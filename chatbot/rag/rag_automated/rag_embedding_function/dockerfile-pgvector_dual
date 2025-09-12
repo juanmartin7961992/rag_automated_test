@@ -8,6 +8,9 @@ WORKDIR /app
 COPY chatbot/rag/rag_automated/rag_embedding_function/requirements_aws_lambda.txt ./requirements.txt
 RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
 
+# Pre-download and cache the tiktoken model to avoid runtime internet access
+RUN python -c "from langchain_text_splitters import RecursiveCharacterTextSplitter; RecursiveCharacterTextSplitter.from_tiktoken_encoder(model_name='gpt-4o')"
+
 # Copy your application code into Lambda's expected path
 COPY chatbot/rag/rag_automated/rag_embedding_function /var/task/chatbot/rag/aws_lambda_function
 COPY chatbot/rag /var/task/chatbot/rag
@@ -17,4 +20,3 @@ COPY chatbot/rag/assets /var/task/chatbot/rag/assets
 
 # Set the Lambda handler
 CMD ["chatbot.rag.rag_automated.rag_embedding_function.app.lambda_handler"]
-
