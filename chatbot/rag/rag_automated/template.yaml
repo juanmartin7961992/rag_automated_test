@@ -40,9 +40,13 @@ Parameters:
   RagImageName:
     Type: String
 
-  # VpcId:
-  # Type: AWS::EC2::VPC::Id
-  # Description: Existing VPC ID where RDS is located
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: Existing VPC ID where RDS is located
+
+  PrivateRouteTable1Id:
+    Type: String
+    Description: Route table ID for private subnet 1
 
   PrivateSubnet1Id:
     Type: AWS::EC2::Subnet::Id
@@ -61,6 +65,31 @@ Parameters:
     Description: Existing security group for Lambda functions
 
 Resources:
+  # VPC S3 Gateway Endpoint
+  S3VpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VpcId
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.s3
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref PrivateRouteTable1Id
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:ListBucket
+            Resource:
+              - !Sub arn:aws:s3:::${InputBucket}
+              - !Sub arn:aws:s3:::${InputBucket}/*
+
+              - !Sub arn:aws:s3:::${ProcessedBucket}
+              - !Sub arn:aws:s3:::${ProcessedBucket}/*
+
   # --- Simple Buckets without notifications first ---
   InputBucket:
     Type: AWS::S3::Bucket
