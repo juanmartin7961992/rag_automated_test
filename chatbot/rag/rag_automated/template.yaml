@@ -15,20 +15,16 @@ Parameters:
 
   DbHost:
     Type: String
-    NoEcho: true
 
   DbPort:
     Type: String
     Default: 5432
-    NoEcho: true
 
   DbName:
     Type: String
-    NoEcho: true
 
   DbUser:
     Type: String
-    NoEcho: true
 
   DbPassword:
     Type: String
@@ -40,11 +36,9 @@ Parameters:
 
   RagRegistry:
     Type: String
-    NoEcho: true
 
   RagImageName:
     Type: String
-    NoEcho: true
 
   # VpcId:
   # Type: AWS::EC2::VPC::Id
