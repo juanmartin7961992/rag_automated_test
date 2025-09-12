@@ -1,12 +1,14 @@
-# .github/workflows/deploy.yml
+# .github/workflows/main.yml
 
-name: Deploy SAM Application - RAG automated
+name: RAG automated - Dev - Build/Deploy
 
 on:
   push:
     branches:
       - rag_automated # Trigger only on this branch
-      - .github/workflows/build-deploy-dev-rag_automated.yml
+    paths:
+      - "chatbot/rag/rag_automated/**" # Only trigger when files in this folder change
+      - ".github/workflows/main.yml"
 
 permissions:
   id-token: write # Required for OIDC
@@ -18,7 +20,8 @@ concurrency:
 
 env:
   AWS_REGION: us-east-2
-  STACK_NAME: uat-rag-automated
+  STACK_NAME: dev-rag-automated
+  ENVIRONMENT: dev
   SAM_TEMPLATE: chatbot/rag/rag_automated/template.yaml
   DOCKERFILE: chatbot/rag/rag_automated/rag_embedding_function/dockerfile-pgvector_dual
   RAG_AUTOMATED_DOCKER_REGISTRY: ${{vars.DEV_RAG_AUTOMATED_DOCKER_REGISTRY}}
@@ -116,6 +119,11 @@ jobs:
               RagRegistry=${{env.RAG_AUTOMATED_DOCKER_REGISTRY}}
               RagImageName=${{env.RAG_AUTOMATED_DOCKER_IMAGE_NAME}}
               RagImageTag=${{ env.IMAGE_TAG }}
+              VpcId="vpc-07f9344620b126698" \
+              PrivateSubnet1Id="subnet-086b6b040206694e5" \
+              PrivateSubnet2Id="subnet-0c27c966a42433ffa" \
+              PrivateSubnet3Id="subnet-034c912787c048003" \
+              LambdaSecurityGroupId="sg-05b1521809248aa2f"
             "
 
       - name: Upload SAM deployment logs

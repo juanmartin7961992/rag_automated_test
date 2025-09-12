@@ -4,6 +4,7 @@ import uuid
 import boto3, json, os
 
 from langchain_openai import OpenAIEmbeddings
+import urllib
 from chatbot.rag.pgvector_dual import DualPGVector
 from chatbot.utils.rag_utils import load_vectorizer
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -29,7 +30,7 @@ def lambda_handler(event, context):
     if "Records" in event:  # S3 event
         for record in event["Records"]:
             bucket = record["s3"]["bucket"]["name"]
-            key = record["s3"]["object"]["key"]
+            key = urllib.parse.unquote_plus(record["s3"]["object"]["key"])
 
             print("Bucket name:", bucket)
             print("Key object:", key)

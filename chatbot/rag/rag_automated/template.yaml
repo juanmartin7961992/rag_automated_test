@@ -46,6 +46,26 @@ Parameters:
     Type: String
     NoEcho: true
 
+  VpcId:
+  Type: AWS::EC2::VPC::Id
+  Description: Existing VPC ID where RDS is located
+
+  PrivateSubnet1Id:
+    Type: AWS::EC2::Subnet::Id
+    Description: First private subnet ID
+
+  PrivateSubnet2Id:
+    Type: AWS::EC2::Subnet::Id
+    Description: Second private subnet ID
+
+  PrivateSubnet3Id:
+    Type: AWS::EC2::Subnet::Id
+    Description: Trhird private subnet ID
+
+  LambdaSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Existing security group for Lambda functions
+
 Resources:
   # --- Simple Buckets without notifications first ---
   InputBucket:
@@ -205,14 +225,16 @@ Resources:
       MemorySize: 512
       Policies:
         - S3ReadPolicy:
-            BucketName: !Ref ParsedBucket
+            BucketName: !Ref InputBucket
         - S3WritePolicy:
             BucketName: !Ref ProcessedBucket
-        # - Statement:
-        #     Effect: Allow
-        #     Action:
-        #       - secretsmanager:GetSecretValue
-        #     Resource: "*"
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroupId
+        SubnetIds:
+          - !Ref PrivateSubnet1Id
+          - !Ref PrivateSubnet2Id
+          - !Ref PrivateSubnet3Id
 
   ParseMultimediaFunction:
     Type: AWS::Serverless::Function

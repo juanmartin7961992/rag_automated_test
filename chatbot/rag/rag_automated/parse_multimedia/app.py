@@ -14,11 +14,6 @@ import asyncio
 import aiofiles
 from contextlib import asynccontextmanager, contextmanager
 import logging
-from typing import Optional, List, Dict, Any
-import requests
-from pydub import AudioSegment
-from io import BytesIO
-import tempfile
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -147,7 +142,7 @@ async def transcribe_audio_chunk(file_path: str) -> str:
         return response
     except Exception as e:
         logger.error(f"Failed to transcribe chunk {file_path}: {str(e)}")
-        return ""  # Return empty string for failed chunks
+        raise
 
 
 @asynccontextmanager
@@ -191,7 +186,7 @@ async def transcribe_audio(audio_file_path: str, chunk_length_sec: int = CHUNK_L
                 audio_data = await f.read()
                 
             resp = await async_client.audio.transcriptions.create(
-                model="whisper-1",
+                model="gpt-4o-mini-transcribe",
                 file=("audio.wav", audio_data),
                 response_format="text"
             )
