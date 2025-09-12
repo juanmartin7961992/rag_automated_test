@@ -12,6 +12,8 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 s3 = boto3.client("s3")
 # s3 = boto3.client('s3', endpoint_url='http://host.docker.internal:4566')
 
+os.environ["TIKTOKEN_CACHE_DIR"] = "/app/tiktoken_cache"
+
 splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
     model_name="gpt-4o",
     chunk_size=500,
