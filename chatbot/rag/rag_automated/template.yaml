@@ -44,21 +44,13 @@ Parameters:
     Type: AWS::EC2::VPC::Id
     Description: Existing VPC ID where RDS is located
 
-  PrivateRouteTable1Id:
-    Type: String
-    Description: Route table ID for private subnet 1
+  PrivateRouteTableIds:
+    Type: CommaDelimitedList
+    Description: Route table IDs for private subnets
 
-  PrivateSubnet1Id:
-    Type: AWS::EC2::Subnet::Id
-    Description: First private subnet ID
-
-  PrivateSubnet2Id:
-    Type: AWS::EC2::Subnet::Id
-    Description: Second private subnet ID
-
-  PrivateSubnet3Id:
-    Type: AWS::EC2::Subnet::Id
-    Description: Trhird private subnet ID
+  PrivateSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Private subnet IDs for Lambda functions
 
   LambdaSecurityGroupId:
     Type: AWS::EC2::SecurityGroup::Id
@@ -72,8 +64,7 @@ Resources:
       VpcId: !Ref VpcId
       ServiceName: !Sub com.amazonaws.${AWS::Region}.s3
       VpcEndpointType: Gateway
-      RouteTableIds:
-        - !Ref PrivateRouteTable1Id
+      RouteTableIds: !Ref PrivateRouteTableIds
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -254,10 +245,7 @@ Resources:
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroupId
-        SubnetIds:
-          - !Ref PrivateSubnet1Id
-          - !Ref PrivateSubnet2Id
-          - !Ref PrivateSubnet3Id
+        SubnetIds: !Ref PrivateSubnetIds
 
   ParseMultimediaFunction:
     Type: AWS::Serverless::Function
@@ -336,3 +324,9 @@ Outputs:
     Value: !Ref PdfIngestQueue
   MultimediaIngestQueueUrl:
     Value: !Ref MultimediaIngestQueue
+  VpcIdOut:
+    Value: !Ref VpcId
+  PrivateSubnetIdsOut:
+    Value: !Join [",", !Ref PrivateSubnetIds]
+  PrivateRouteTableIdsOut:
+    Value: !Join [",", !Ref PrivateRouteTableIds]
